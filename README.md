@@ -21,10 +21,16 @@ end
 ```elixir
 defmodule Example do
   use Francis
-  import FrancisHtmx
+
+  use FrancisHtmx,
+    version: "2",
+    title: "Testing HTMX",
+    head: ~E"""
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="/app.css" rel="stylesheet">
+    """
 
   htmx(fn _conn ->
-    assigns = %{}
     ~E"""
     <style>
       .smooth {   transition: all 1s ease-in; font-size: 8rem; }
@@ -46,4 +52,5 @@ defmodule Example do
     """
   end)
 end
+
 ```
