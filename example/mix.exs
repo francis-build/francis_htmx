@@ -22,7 +22,9 @@ defmodule Example.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:francis_htmx, path: "../"}
+      {:francis_htmx, path: "../"},
+      {:req, "~> 0.3", only: :test},
+      {:floki, "~> 0.35", only: :test}
     ]
   end
 end

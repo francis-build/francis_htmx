@@ -1,9 +1,8 @@
 defmodule Example do
   use Francis
-  import FrancisHtmx
+  use FrancisHtmx, version: "2", title: "HTMX Example"
 
   htmx(fn _conn ->
-    assigns = %{}
     ~E"""
     <style>
       .smooth {   transition: all 1s ease-in; font-size: 8rem; }
