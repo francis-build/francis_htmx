@@ -1,6 +1,6 @@
 defmodule FrancisHtmx.MixProject do
   use Mix.Project
-  @version "0.2.0"
+  @version "0.2.1"
   def project do
     [
       name: "Francis HTMX",
@@ -33,7 +33,7 @@ defmodule FrancisHtmx.MixProject do
   defp deps do
     [
       {:francis, "~> 0.1"},
-      {:phoenix_html, "~> 3.3"},
+      {:phoenix_html, "~> 4.0"},
       {:req, "~> 0.4.5", only: :test},
       {:floki, "~> 0.35.2", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
