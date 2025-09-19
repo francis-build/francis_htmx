@@ -41,6 +41,8 @@ defmodule FrancisHtmx do
     quote do
       import FrancisHtmx
       import unquote(__MODULE__), only: [htmx: 1, htmx: 2, sigil_E: 2]
+      import Phoenix.HTML
+
       checker = ~r/^(\d+\.)?(\d+\.)?(\*|\d+)$/
       version = Application.compile_env(:francis_htmx, :version, "2")
       version = Keyword.get(unquote(opts), :version, version)
