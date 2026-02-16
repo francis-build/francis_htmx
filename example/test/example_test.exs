@@ -1,71 +1,113 @@
 defmodule ExampleTest do
   use ExUnit.Case
+  import Plug.Conn
 
-  test "renders html content with htmx loaded and initial color demo" do
-    response = Req.get!("/", plug: Example)
+  describe "GET /" do
+    test "renders full page with HTMX and navigation for direct access" do
+      response = Req.get!("/", plug: Example)
 
-    assert response.status == 200
-    assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
 
-    body = response.body
-    html = Floki.parse_document!(body)
+      html = Floki.parse_document!(response.body)
 
-    # Check that HTMX script is loaded
-    assert html
-           |> Floki.find("script")
-           |> Floki.attribute("src") == [
-             "https://unpkg.com/htmx.org@2"
-           ]
+      assert html |> Floki.find("title") |> Floki.text() =~ "Taskflow"
 
-    # Check title is set correctly
-    assert html
-           |> Floki.find("title")
-           |> Floki.text() == "HTMX Example"
+      scripts = Floki.find(html, "script") |> Floki.attribute("src")
+      assert "https://unpkg.com/htmx.org@2" in scripts
 
-    # Check that the color demo div is present with correct attributes
-    color_demo_div = Floki.find(html, "div[hx-get='/colors']")
+      assert [{"nav", _, _}] = Floki.find(html, "nav")
+      assert [{"div", _, _}] = Floki.find(html, "#main-content")
+    end
 
-    assert length(color_demo_div) == 1
+    test "returns task list content for HTMX request" do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> put_req_header("hx-request", "true")
+        |> Example.call([])
 
-    assert Floki.attribute(color_demo_div, "hx-trigger") == ["every 1s"]
-
-    # Check that the initial color demo paragraph is present
-    assert html
-           |> Floki.find("p#color-demo")
-           |> Floki.text() == "Color Swap Demo"
-
-    # Check that the smooth CSS class is applied
-    assert html
-           |> Floki.find("p#color-demo")
-           |> Floki.attribute("class") == ["smooth"]
-
-    # Check that the CSS styles are included
-    assert html
-           |> Floki.find("style")
-           |> Floki.text() =~ ".smooth"
+      assert conn.status == 200
+      assert conn.resp_body =~ "task-list"
+      assert conn.resp_body =~ "Tasks"
+    end
   end
 
-  test "renders color endpoint with dynamic color" do
-    response = Req.get!("/colors", plug: Example)
+  describe "POST /tasks" do
+    test "creates a task and returns updated list" do
+      conn =
+        :post
+        |> Plug.Test.conn("/tasks", "title=Test+Task")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> put_req_header("hx-request", "true")
+        |> Example.call([])
 
-    assert response.status == 200
+      assert conn.status == 200
+      assert conn.resp_body =~ "Test Task"
+      assert conn.resp_body =~ "task-list"
+    end
+  end
 
-    body = response.body
-    html = Floki.parse_document!(body)
+  describe "GET /tasks/new" do
+    test "renders add task form with HTMX request" do
+      conn =
+        :get
+        |> Plug.Test.conn("/tasks/new")
+        |> put_req_header("hx-request", "true")
+        |> Example.call([])
 
-    # Check that the color demo paragraph is present
-    color_param = Floki.find(html, "p#color-demo")
+      assert conn.status == 200
+      assert conn.resp_body =~ "Add"
+      assert conn.resp_body =~ "hx-post"
+      assert conn.resp_body =~ "What needs to be done"
+    end
 
-    assert length(color_param) == 1
-    assert Floki.text(color_param) =~ "Color Swap Demo"
+    test "renders full page for direct access" do
+      conn =
+        :get
+        |> Plug.Test.conn("/tasks/new")
+        |> Example.call([])
 
-    # Check that the smooth CSS class is applied
-    assert Floki.attribute(color_param, "class") == ["smooth"]
+      assert conn.status == 200
+      assert conn.resp_body =~ "Taskflow"
+      assert conn.resp_body =~ "main-content"
+    end
+  end
 
-    # Check that a style attribute with color is present
-    style_attr = Floki.attribute(color_param, "style")
+  describe "DELETE /tasks/:id" do
+    test "deletes task" do
+      # First create a task
+      conn =
+        :post
+        |> Plug.Test.conn("/tasks", "title=To+Delete")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> Example.call([])
 
-    assert length(style_attr) == 1
-    assert hd(style_attr) =~ "color:#"
+      assert conn.status == 200
+      assert conn.resp_body =~ "To Delete"
+
+      # Find the task row containing "To Delete" and extract its id
+      html = Floki.parse_document!(conn.resp_body)
+      matching =
+        Floki.find(html, "div[id^='task-']")
+        |> Enum.filter(fn d ->
+          [id] = Floki.attribute(d, "id")
+          id != "task-list" and Floki.text(d) =~ "To Delete"
+        end)
+
+      assert [task_div] = matching
+      [id] = Floki.attribute(task_div, "id")
+      id = String.replace(id, "task-", "")
+
+      # Delete it
+      conn =
+        :delete
+        |> Plug.Test.conn("/tasks/#{id}")
+        |> put_req_header("hx-request", "true")
+        |> Example.call([])
+
+      assert conn.status == 200
+      refute conn.resp_body =~ "To Delete"
+    end
   end
 end

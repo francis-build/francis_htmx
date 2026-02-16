@@ -27,3 +27,5 @@ francis_htmx-*.tar
 
 priv/plts/
 
+.DS_Store
+

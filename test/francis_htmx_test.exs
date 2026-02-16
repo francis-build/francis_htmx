@@ -76,7 +76,7 @@ defmodule FrancisHtmxTest do
 
                        htmx(fn _ ->
                          assigns = %{title: "test"}
-                         ~E"<div>Test</div>"
+                         ~H"<div>Test</div>"
                        end)
                      end
                    end
@@ -90,7 +90,7 @@ defmodule FrancisHtmxTestHandlerWithAssigns do
   use FrancisHtmx,
     version: "2",
     title: "Testing HTMX",
-    head: ~E"""
+    head: """
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="/app.css" rel="stylesheet">
     """
@@ -98,8 +98,8 @@ defmodule FrancisHtmxTestHandlerWithAssigns do
   htmx(fn _ ->
     assigns = %{content: "test"}
 
-    ~E"""
-    <div><%= @content %></div>
+    ~H"""
+    <div>{@content}</div>
     """
   end)
 end
@@ -110,13 +110,15 @@ defmodule FrancisHtmxTestHandlerWithoutAssigns do
   use FrancisHtmx,
     version: "2",
     title: "Testing HTMX",
-    head: ~E"""
+    head: """
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="/app.css" rel="stylesheet">
     """
 
   htmx(fn _ ->
-    ~E"""
+    assigns = %{}
+
+    ~H"""
     <div>test</div>
     """
   end)

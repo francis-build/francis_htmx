@@ -23,6 +23,8 @@ defmodule Example.MixProject do
   defp deps do
     [
       {:francis_htmx, path: "../"},
+      {:heroicons, "~> 0.5"},
+      {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:req, "~> 0.3", only: :test},
       {:floki, "~> 0.35", only: :test}
     ]

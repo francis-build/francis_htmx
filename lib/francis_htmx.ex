@@ -1,17 +1,17 @@
 defmodule FrancisHtmx do
   @moduledoc """
   Provides a macro to render htmx content by loading htmx.js.
-  Also provides a sigil to render EEx content similar to ~H from Phoenix.LiveView
+  Uses Phoenix's `~H` sigil (HEEx) for templating with full component support.
 
   Usage:
   ```elixir
     defmodule Example do
       use Francis
-      import FrancisHtmx
+      use FrancisHtmx
 
       htmx(fn _conn ->
         assigns = %{}
-        ~E\"\"\"
+        ~H\"\"\"
         <style>
           .smooth {   transition: all 1s ease-in; font-size: 8rem; }
         </style>
@@ -22,11 +22,10 @@ defmodule FrancisHtmx do
       end)
 
       get("/colors", fn _ ->
-        new_color = 3 |> :crypto.strong_rand_bytes() |> Base.encode16() |> then(&"\#{&1}")
-        assigns = %{new_color: new_color}
+        assigns = %{new_color: "red"}
 
-        ~E\"\"\"
-        <p id="color-demo" class="smooth" style="<%= "color:\#{@new_color}"%>">
+        ~H\"\"\"
+        <p id="color-demo" class="smooth" style={"color:\#{@new_color}"}>
         Color Swap Demo
         </p>
         \"\"\"
@@ -39,9 +38,10 @@ defmodule FrancisHtmx do
 
   defmacro __using__(opts) do
     quote do
-      import FrancisHtmx
-      import unquote(__MODULE__), only: [htmx: 1, htmx: 2, sigil_E: 2]
+      import Phoenix.Component, only: [sigil_H: 2, assign: 2, assign: 3]
       import Phoenix.HTML
+      import FrancisHtmx.Page, only: [render_page: 2, render_page: 3, route: 2, route: 3]
+      import unquote(__MODULE__), only: [htmx: 1, htmx: 2]
 
       checker = ~r/^(\d+\.)?(\d+\.)?(\*|\d+)$/
       version = Application.compile_env(:francis_htmx, :version, "2")
@@ -63,23 +63,51 @@ defmodule FrancisHtmx do
   end
 
   @doc """
+  Converts a `~H` rendered result or a string to a plain HTML string.
+
+  This is useful when you need to pass `~H` output to functions that expect strings,
+  such as layout functions or string interpolation.
+
+  ## Examples
+
+      rendered_to_string(~H"<div>Hello</div>")
+      #=> "<div>Hello</div>"
+
+      rendered_to_string("<div>Hello</div>")
+      #=> "<div>Hello</div>"
+  """
+  def rendered_to_string(content) when is_binary(content), do: content
+
+  def rendered_to_string(%Phoenix.LiveView.Rendered{} = rendered) do
+    rendered
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
+  end
+
+  def rendered_to_string({:safe, iodata}) do
+    IO.iodata_to_binary(iodata)
+  end
+
+  @doc """
   Renders htmx content by loading htmx.js and rendering binary content.
   """
   @spec htmx((Plug.Conn.t() -> binary())) :: Macro.t()
   defmacro htmx(content) do
     quote location: :keep do
       get("/", fn conn ->
+        head = FrancisHtmx.rendered_to_string(@htmx_head)
+        body = FrancisHtmx.rendered_to_string(unquote(content).(conn))
+
         html(conn, """
         <!DOCTYPE html>
         <html>
           <head>
-            #{@htmx_head}
-
+            #{head}
             <script src="https://unpkg.com/htmx.org@#{@htmx_version}"></script>
             <title>#{@htmx_title}</title>
           </head>
           <body>
-            #{unquote(content).(conn)}
+            #{body}
           </body>
         </html>
         """)
@@ -89,59 +117,54 @@ defmodule FrancisHtmx do
 
   @doc """
   Renders htmx content by loading htmx.js and rendering binary content.
+
+  ## Options
+
+  - `:title` - Page title (overrides default)
+  - `:head` - Additional head content (overrides default)
+  - `:extensions` - List of HTMX extensions to load (atom or string)
+  - `:body_attrs` - Additional attributes for the body tag
+
+  ## Examples
+
+      htmx(fn _conn -> ~H"<div>Content</div>" end,
+        title: "My Page",
+        extensions: [:sse, :ws],
+        body_attrs: ~s(hx-ext="sse")
+      )
   """
   @spec htmx((Plug.Conn.t() -> binary()), Keyword.t()) :: Macro.t()
   defmacro htmx(content, opts) do
     quote location: :keep do
       get("/", fn conn ->
         title = Keyword.get(unquote(opts), :title, @htmx_title)
-        head = Keyword.get(unquote(opts), :head, @htmx_head)
+        head = FrancisHtmx.rendered_to_string(Keyword.get(unquote(opts), :head, @htmx_head))
+        extensions = Keyword.get(unquote(opts), :extensions, [])
+        body_attrs = Keyword.get(unquote(opts), :body_attrs, "")
+        body = FrancisHtmx.rendered_to_string(unquote(content).(conn))
+
+        extension_scripts =
+          if extensions != [] do
+            FrancisHtmx.Extensions.extension_scripts(extensions)
+          else
+            ""
+          end
 
         html(conn, """
         <!DOCTYPE html>
         <html>
           <head>
             #{head}
-
             <script src="https://unpkg.com/htmx.org@#{@htmx_version}"></script>
+            #{extension_scripts}
             <title>#{title}</title>
           </head>
-          <body>
-            #{unquote(content).(conn)}
+          <body #{body_attrs}>
+            #{body}
           </body>
         </html>
         """)
       end)
-    end
-  end
-
-  @doc """
-  Provides a sigil to render EEx content similar to ~H from Phoenix.LiveView
-
-  If a variable named "assigns" doesn't exist, it will be set to an empty map.
-  """
-  @spec sigil_E(String.t(), Keyword.t()) :: Macro.t()
-  defmacro sigil_E(content, _opts \\ []) do
-    if Macro.Env.has_var?(__CALLER__, {:assigns, nil}) do
-      quote location: :keep do
-        content =
-          EEx.eval_string(unquote(content), [assigns: var!(assigns)], engine: Phoenix.HTML.Engine)
-
-        content
-        |> Phoenix.HTML.html_escape()
-        |> Phoenix.HTML.safe_to_string()
-      end
-    else
-      quote location: :keep do
-        assigns = %{}
-
-        content =
-          EEx.eval_string(unquote(content), [assigns: assigns], engine: Phoenix.HTML.Engine)
-
-        content
-        |> Phoenix.HTML.html_escape()
-        |> Phoenix.HTML.safe_to_string()
-      end
     end
   end
 end
