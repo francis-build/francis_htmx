@@ -1,6 +1,5 @@
 defmodule FrancisHtmxTest do
   use ExUnit.Case
-  alias FrancisHtmx
 
   describe "htmx/1" do
     test "renders html content with htmx inlined and renders assigns" do
@@ -17,6 +16,7 @@ defmodule FrancisHtmxTest do
       # htmx.js is inlined, not loaded from CDN
       scripts = Floki.find(html, "script")
       assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
+      refute body =~ "unpkg.com"
 
       # Tailwind is still loaded from head option
       assert html
@@ -53,9 +53,10 @@ defmodule FrancisHtmxTest do
       body = response.body
       html = Floki.parse_document!(body)
 
-      # htmx.js is inlined
+      # htmx.js is inlined, not loaded from CDN
       scripts = Floki.find(html, "script")
       assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
+      refute body =~ "unpkg.com"
 
       assert html
              |> Floki.find("script[src]")
@@ -68,6 +69,11 @@ defmodule FrancisHtmxTest do
       assert html
              |> Floki.find("title")
              |> Floki.text() == "Testing HTMX"
+
+      # Verify proper HTML5 structure
+      assert body =~ ~s(<html lang="en">)
+      assert body =~ ~s(<meta charset="utf-8">)
+      assert body =~ ~s(<meta name="viewport")
 
       assert html
              |> Floki.find("body")
@@ -85,6 +91,43 @@ defmodule FrancisHtmxTest do
       # The raw <script> tag in the title should be escaped
       refute body =~ "<title><script>alert('xss')</script></title>"
       assert body =~ "&lt;script&gt;"
+    end
+  end
+
+  describe "htmx/2" do
+    test "allows overriding title and head via opts" do
+      response =
+        Req.get!("/", plug: FrancisHtmxTestHandlerWithOpts)
+
+      assert response.status == 200
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+
+      body = response.body
+      html = Floki.parse_document!(body)
+
+      # Title is overridden via htmx/2 opts
+      assert html
+             |> Floki.find("title")
+             |> Floki.text() == "Overridden Title"
+
+      # Head content from opts is present
+      assert html
+             |> Floki.find("link")
+             |> Floki.attribute("href") == ["/custom.css"]
+
+      # htmx.js is still inlined
+      scripts = Floki.find(html, "script")
+      assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
+      refute body =~ "unpkg.com"
+
+      # Verify proper HTML5 structure
+      assert body =~ ~s(<html lang="en">)
+      assert body =~ ~s(<meta charset="utf-8">)
+
+      assert html
+             |> Floki.find("body")
+             |> Floki.find("div")
+             |> Floki.text() == "override test"
     end
   end
 end
@@ -136,4 +179,21 @@ defmodule FrancisHtmxTestHandlerXSSTitle do
     <div>safe</div>
     """
   end)
+end
+
+defmodule FrancisHtmxTestHandlerWithOpts do
+  use Francis
+  use FrancisHtmx, title: "Default Title"
+
+  htmx(
+    fn _ ->
+      ~E"""
+      <div>override test</div>
+      """
+    end,
+    title: "Overridden Title",
+    head: ~E"""
+      <link href="/custom.css" rel="stylesheet">
+    """
+  )
 end
