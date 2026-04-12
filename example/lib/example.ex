@@ -1,6 +1,6 @@
 defmodule Example do
   use Francis
-  use FrancisHtmx, version: "2", title: "HTMX Example"
+  use FrancisHtmx, title: "HTMX Example"
 
   htmx(fn _conn ->
     ~E"""

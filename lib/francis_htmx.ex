@@ -1,13 +1,17 @@
 defmodule FrancisHtmx do
   @moduledoc """
-  Provides a macro to render htmx content by loading htmx.js.
-  Also provides a sigil to render EEx content similar to ~H from Phoenix.LiveView
+  Provides a macro to render htmx content by bundling htmx.js inline.
+  Also provides a sigil to render EEx content similar to ~H from Phoenix.LiveView.
+
+  The htmx.js library is bundled and inlined in the HTML output, eliminating
+  the need for CDN dependencies. Use `mix francis_htmx.update` to download
+  a specific version of htmx.
 
   Usage:
   ```elixir
     defmodule Example do
       use Francis
-      import FrancisHtmx
+      use FrancisHtmx, title: "My App"
 
       htmx(fn _conn ->
         assigns = %{}
@@ -34,8 +38,13 @@ defmodule FrancisHtmx do
     end
   ```
 
-  In this scenario we are loading serving an HTML that has the htmx.js library loaded and serves the root content given by htmx/1
+  In this scenario we are serving an HTML page with the htmx.js library inlined
+  and the root content given by htmx/1.
   """
+
+  @htmx_js_path Path.join([__DIR__, "..", "priv", "static", "htmx.min.js"])
+  @external_resource @htmx_js_path
+  @htmx_js File.read!(@htmx_js_path)
 
   defmacro __using__(opts) do
     quote do
@@ -43,40 +52,41 @@ defmodule FrancisHtmx do
       import unquote(__MODULE__), only: [htmx: 1, htmx: 2, sigil_E: 2]
       import Phoenix.HTML
 
-      checker = ~r/^(\d+\.)?(\d+\.)?(\*|\d+)$/
-      version = Application.compile_env(:francis_htmx, :version, "2")
-      version = Keyword.get(unquote(opts), :version, version)
+      if Keyword.has_key?(unquote(opts), :version) do
+        IO.warn(
+          "The :version option for FrancisHtmx is deprecated. " <>
+            "htmx is now bundled inline. Use `mix francis_htmx.update VERSION` to change the bundled version."
+        )
+      end
+
       title = Keyword.get(unquote(opts), :title, "")
       head = Keyword.get(unquote(opts), :head, "")
 
-      if !Regex.match?(checker, version) do
-        raise "Invalid version format. Expected format is 'x.y.z' or 'x.y.*'. Got: '#{version}'"
-      end
-
-      Module.put_attribute(__MODULE__, :htmx_version, version)
       Module.put_attribute(__MODULE__, :htmx_title, title)
       Module.put_attribute(__MODULE__, :htmx_head, head)
-      Module.register_attribute(__MODULE__, :htmx_version, accumulate: false)
       Module.register_attribute(__MODULE__, :htmx_title, accumulate: false)
       Module.register_attribute(__MODULE__, :htmx_head, accumulate: false)
     end
   end
 
   @doc """
-  Renders htmx content by loading htmx.js and rendering binary content.
+  Renders htmx content by inlining htmx.js and rendering binary content.
   """
   @spec htmx((Plug.Conn.t() -> binary())) :: Macro.t()
   defmacro htmx(content) do
+    htmx_js = @htmx_js
+
     quote location: :keep do
       get("/", fn conn ->
         html(conn, """
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
           <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             #{@htmx_head}
-
-            <script src="https://unpkg.com/htmx.org@#{@htmx_version}"></script>
-            <title>#{@htmx_title}</title>
+            <script>#{unquote(htmx_js)}</script>
+            <title>#{Francis.HTML.escape(@htmx_title)}</title>
           </head>
           <body>
             #{unquote(content).(conn)}
@@ -88,10 +98,12 @@ defmodule FrancisHtmx do
   end
 
   @doc """
-  Renders htmx content by loading htmx.js and rendering binary content.
+  Renders htmx content by inlining htmx.js and rendering binary content.
   """
   @spec htmx((Plug.Conn.t() -> binary()), Keyword.t()) :: Macro.t()
   defmacro htmx(content, opts) do
+    htmx_js = @htmx_js
+
     quote location: :keep do
       get("/", fn conn ->
         title = Keyword.get(unquote(opts), :title, @htmx_title)
@@ -99,12 +111,13 @@ defmodule FrancisHtmx do
 
         html(conn, """
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
           <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             #{head}
-
-            <script src="https://unpkg.com/htmx.org@#{@htmx_version}"></script>
-            <title>#{title}</title>
+            <script>#{unquote(htmx_js)}</script>
+            <title>#{Francis.HTML.escape(title)}</title>
           </head>
           <body>
             #{unquote(content).(conn)}

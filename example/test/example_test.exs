@@ -1,21 +1,25 @@
 defmodule ExampleTest do
   use ExUnit.Case
 
-  test "renders html content with htmx loaded and initial color demo" do
+  test "renders html content with htmx inlined and initial color demo" do
     response = Req.get!("/", plug: Example)
 
     assert response.status == 200
     assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+    assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
 
     body = response.body
     html = Floki.parse_document!(body)
 
-    # Check that HTMX script is loaded
-    assert html
-           |> Floki.find("script")
-           |> Floki.attribute("src") == [
-             "https://unpkg.com/htmx.org@2"
-           ]
+    # Check that htmx is inlined (no CDN script src)
+    scripts = Floki.find(html, "script")
+    assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
+    assert Floki.find(html, "script[src]") == []
+
+    # Check proper HTML5 structure
+    assert body =~ ~s(<html lang="en">)
+    assert body =~ ~s(<meta charset="utf-8">)
+    assert body =~ ~s(<meta name="viewport")
 
     # Check title is set correctly
     assert html
