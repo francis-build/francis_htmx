@@ -1,45 +1,55 @@
 defmodule FrancisHtmx do
   @moduledoc """
-  Provides a macro to render htmx content by bundling htmx.js inline.
-  Also provides a sigil to render EEx content similar to ~H from Phoenix.LiveView.
+  HTMX integration for the Francis web framework.
 
-  The htmx.js library is bundled and inlined in the HTML output, eliminating
-  the need for CDN dependencies. Use `mix francis_htmx.update` to download
-  a specific version of htmx.
+  Provides the `htmx` macro that generates a full HTML page with htmx.js bundled
+  inline (no CDN dependency), and the `~E` sigil for EEx templating with `@assigns`
+  support.
 
-  Usage:
-  ```elixir
-    defmodule Example do
-      use Francis
-      use FrancisHtmx, title: "My App"
+  ## Setup
 
-      htmx(fn _conn ->
-        assigns = %{}
-        ~E\"\"\"
-        <style>
-          .smooth {   transition: all 1s ease-in; font-size: 8rem; }
-        </style>
-        <div hx-get="/colors" hx-trigger="every 1s">
-          <p id="color-demo" class="smooth">Color Swap Demo</p>
-        </div>
-        \"\"\"
-      end)
+      defmodule MyApp do
+        use Francis
+        use FrancisHtmx, title: "My App"
+      end
 
-      get("/colors", fn _ ->
-        new_color = 3 |> :crypto.strong_rand_bytes() |> Base.encode16() |> then(&"\#{&1}")
-        assigns = %{new_color: new_color}
+  ## Options
 
-        ~E\"\"\"
-        <p id="color-demo" class="smooth" style="<%= "color:\#{@new_color}"%>">
-        Color Swap Demo
-        </p>
-        \"\"\"
-      end)
-    end
-  ```
+    * `:title` — HTML page title, escaped via `Francis.HTML.escape/1` (default: `""`)
+    * `:head` — additional HTML injected into `<head>`, e.g. stylesheets or scripts (default: `""`)
 
-  In this scenario we are serving an HTML page with the htmx.js library inlined
-  and the root content given by htmx/1.
+  ## Example
+
+      defmodule Example do
+        use Francis
+        use FrancisHtmx, title: "Color Demo"
+
+        htmx(fn _conn ->
+          ~E\"\"\"
+          <div hx-get="/colors" hx-trigger="every 1s">
+            <p id="color-demo">Color Swap Demo</p>
+          </div>
+          \"\"\"
+        end)
+
+        get("/colors", fn _ ->
+          new_color = 3 |> :crypto.strong_rand_bytes() |> Base.encode16() |> then(&"\#\#{&1}")
+          assigns = %{new_color: new_color}
+
+          ~E\"\"\"
+          <p id="color-demo" style="<%= "color:\#{@new_color}" %>">Color Swap Demo</p>
+          \"\"\"
+        end)
+      end
+
+  ## Updating htmx
+
+  The bundled htmx.js version can be updated via the included Mix task:
+
+      mix francis_htmx.update          # downloads the latest release
+      mix francis_htmx.update 2.0.4    # downloads a specific version
+
+  After updating, recompile with `mix compile --force` to pick up the new version.
   """
 
   @htmx_js_path Path.join([__DIR__, "..", "priv", "static", "htmx.min.js"])
@@ -70,7 +80,19 @@ defmodule FrancisHtmx do
   end
 
   @doc """
-  Renders htmx content by inlining htmx.js and rendering binary content.
+  Defines a `GET "/"` route that serves a full HTML page with htmx.js inlined.
+
+  The `content` function receives the `Plug.Conn` and must return an HTML binary
+  (typically via the `~E` sigil). The generated page includes proper HTML5 structure,
+  the bundled htmx.js, and any head/title configured via `use FrancisHtmx`.
+
+  ## Example
+
+      htmx(fn _conn ->
+        ~E\"\"\"
+        <div hx-get="/api" hx-trigger="load">Loading...</div>
+        \"\"\"
+      end)
   """
   @spec htmx((Plug.Conn.t() -> binary())) :: Macro.t()
   defmacro htmx(content) do
@@ -98,7 +120,27 @@ defmodule FrancisHtmx do
   end
 
   @doc """
-  Renders htmx content by inlining htmx.js and rendering binary content.
+  Defines a `GET "/"` route with per-page title and head overrides.
+
+  Works like `htmx/1` but accepts a keyword list to override the `:title` and `:head`
+  values set in `use FrancisHtmx`.
+
+  ## Options
+
+    * `:title` — overrides the page `<title>` (escaped via `Francis.HTML.escape/1`)
+    * `:head` — overrides the extra `<head>` content (scripts, stylesheets, etc.)
+
+  ## Example
+
+      htmx(
+        fn _conn ->
+          ~E\"\"\"
+          <h1>Dashboard</h1>
+          \"\"\"
+        end,
+        title: "Dashboard",
+        head: ~E\"\"\"<link href="/dashboard.css" rel="stylesheet">\"\"\"
+      )
   """
   @spec htmx((Plug.Conn.t() -> binary()), Keyword.t()) :: Macro.t()
   defmacro htmx(content, opts) do
@@ -129,9 +171,24 @@ defmodule FrancisHtmx do
   end
 
   @doc """
-  Provides a sigil to render EEx content similar to ~H from Phoenix.LiveView
+  Renders an EEx template string with `@assigns` support, similar to Phoenix LiveView's `~H`.
 
-  If a variable named "assigns" doesn't exist, it will be set to an empty map.
+  Uses `Phoenix.HTML.Engine` for safe HTML rendering — interpolated values are
+  automatically escaped. If no `assigns` variable exists in the calling scope,
+  an empty map is used.
+
+  ## Examples
+
+      # With explicit assigns
+      assigns = %{name: "World"}
+      ~E\"\"\"
+      <p>Hello, <%= @name %>!</p>
+      \"\"\"
+
+      # Without assigns (empty map used automatically)
+      ~E\"\"\"
+      <p>Static content</p>
+      \"\"\"
   """
   @spec sigil_E(String.t(), Keyword.t()) :: Macro.t()
   defmacro sigil_E(content, _opts \\ []) do

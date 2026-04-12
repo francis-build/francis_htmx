@@ -13,7 +13,7 @@ defmodule FrancisHtmx.MixProject do
       docs: docs(),
       source_url: "https://github.com/filipecabaco/francis_htmx",
       elixirc_paths: elixirc_paths(Mix.env()),
-      description: "Francis module for HTMX integration",
+      description: "HTMX integration for Francis with bundled htmx.js and EEx templating",
       dialyzer: [
         # Put the project-level PLT in the priv/ directory (instead of the default _build/ location)
         plt_file: {:no_warn, "priv/plts/project.plt"},
