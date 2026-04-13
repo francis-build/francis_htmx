@@ -58,7 +58,6 @@ defmodule FrancisHtmx do
 
   defmacro __using__(opts) do
     quote do
-      import FrancisHtmx
       import unquote(__MODULE__), only: [htmx: 1, htmx: 2, sigil_E: 2]
       import Phoenix.HTML
 
@@ -94,7 +93,6 @@ defmodule FrancisHtmx do
         \"\"\"
       end)
   """
-  @spec htmx((Plug.Conn.t() -> binary())) :: Macro.t()
   defmacro htmx(content) do
     htmx_js = @htmx_js
 
@@ -142,7 +140,6 @@ defmodule FrancisHtmx do
         head: ~E\"\"\"<link href="/dashboard.css" rel="stylesheet">\"\"\"
       )
   """
-  @spec htmx((Plug.Conn.t() -> binary()), Keyword.t()) :: Macro.t()
   defmacro htmx(content, opts) do
     htmx_js = @htmx_js
 
@@ -190,7 +187,6 @@ defmodule FrancisHtmx do
       <p>Static content</p>
       \"\"\"
   """
-  @spec sigil_E(String.t(), Keyword.t()) :: Macro.t()
   defmacro sigil_E(content, _opts \\ []) do
     if Macro.Env.has_var?(__CALLER__, {:assigns, nil}) do
       quote location: :keep do
