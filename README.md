@@ -108,6 +108,63 @@ After updating, recompile your project to pick up the new version:
 mix compile --force
 ```
 
+## Roadmap
+
+Planned enhancements for future releases:
+
+### Request header helpers
+Read htmx context from incoming requests — detect htmx requests, inspect which element triggered the request, and access prompt input:
+
+```elixir
+if FrancisHtmx.htmx_request?(conn) do
+  # serve fragment only
+end
+
+FrancisHtmx.target(conn)        # HX-Target
+FrancisHtmx.trigger(conn)       # HX-Trigger (element id)
+FrancisHtmx.trigger_name(conn)  # HX-Trigger-Name
+FrancisHtmx.current_url(conn)   # HX-Current-URL
+FrancisHtmx.prompt(conn)        # HX-Prompt
+FrancisHtmx.boosted?(conn)      # HX-Boosted
+```
+
+### Response header helpers
+Control htmx client behavior from the server — trigger events, push URLs, retarget swaps, or force redirects:
+
+```elixir
+conn
+|> FrancisHtmx.trigger("showToast")       # HX-Trigger
+|> FrancisHtmx.push_url("/new-path")      # HX-Push-Url
+|> FrancisHtmx.retarget("#other-div")     # HX-Retarget
+|> FrancisHtmx.reswap("outerHTML")        # HX-Reswap
+|> FrancisHtmx.hx_redirect("/login")      # HX-Redirect
+|> FrancisHtmx.refresh()                  # HX-Refresh
+```
+
+### Full page vs fragment rendering
+Automatically serve the full HTML page on direct browser navigation, but only the inner fragment when htmx makes the request:
+
+```elixir
+htmx("/dashboard", fn conn ->
+  ~E"""<div id="content">Dashboard</div>"""
+end)
+```
+
+### Extension bundling
+Bundle popular htmx extensions (`head-support`, `sse`, `json-enc`) the same way htmx.js is bundled, selectable via options:
+
+```elixir
+use FrancisHtmx,
+  title: "My App",
+  extensions: [:head_support, :sse]
+```
+
+### SSE integration
+Server-Sent Events helpers that complement Francis's existing WebSocket support — a simpler alternative for server-push scenarios like live feeds and notifications.
+
+### CSRF protection
+Auto-inject a CSRF token `<meta>` tag and configure htmx to include it in mutating requests (`POST`, `PUT`, `DELETE`) via `hx-headers` or `htmx.config.getCsrfToken`.
+
 ## Migrating from v0.2
 
 - The `:version` option is **deprecated** — htmx is now bundled and inlined instead of loaded from a CDN. Use `mix francis_htmx.update` to manage versions.
