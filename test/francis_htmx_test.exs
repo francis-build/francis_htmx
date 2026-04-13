@@ -1,62 +1,70 @@
 defmodule FrancisHtmxTest do
   use ExUnit.Case
 
-  describe "htmx/1" do
-    test "DIAGNOSTIC: check handler module and francis version" do
-      # Check that handler module is available
-      assert Code.ensure_loaded?(FrancisHtmxTestHandlerWithAssigns),
-        "Handler module not loaded"
-
-      # Check Francis.HTML availability
-      assert Code.ensure_loaded?(Francis.HTML),
-        "Francis.HTML module not available - wrong Francis version?"
-
-      # Check Francis version
-      francis_vsn =
-        Application.spec(:francis, :vsn) |> to_string()
-
-      assert francis_vsn =~ "0.3",
-        "Expected Francis ~> 0.3.x, got: #{francis_vsn}"
-
-      # Try the actual request and capture any error
-      try do
-        response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
-
-        flunk(
-          "DIAG: status=#{response.status} " <>
-            "content-type=#{inspect(response.headers["content-type"])} " <>
-            "cache-control=#{inspect(response.headers["cache-control"])} " <>
-            "body_size=#{byte_size(to_string(response.body))} " <>
-            "body_start=#{String.slice(to_string(response.body), 0, 300)}"
-        )
-      rescue
-        e ->
-          flunk("DIAG ERROR: #{Exception.format(:error, e, __STACKTRACE__)}")
-      end
+  describe "diag" do
+    test "D1 Francis.HTML module is loaded" do
+      assert Code.ensure_loaded?(Francis.HTML)
     end
 
+    test "D2 Francis.ResponseHandlers module is loaded" do
+      assert Code.ensure_loaded?(Francis.ResponseHandlers)
+    end
+
+    test "D3 handler module with assigns is loaded" do
+      assert Code.ensure_loaded?(FrancisHtmxTestHandlerWithAssigns)
+    end
+
+    test "D4 handler module XSS is loaded" do
+      assert Code.ensure_loaded?(FrancisHtmxTestHandlerXSSTitle)
+    end
+
+    test "D5 GET with assigns returns status 200" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      assert response.status == 200
+    end
+
+    test "D6 GET with assigns has content-type header" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+    end
+
+    test "D7 GET with assigns has cache-control header" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+    end
+
+    test "D8 GET with assigns body contains html lang" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      assert response.body =~ ~s(<html lang="en">)
+    end
+
+    test "D9 GET with assigns body contains htmx script inline" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      assert response.body =~ "htmx"
+      refute response.body =~ "unpkg.com"
+    end
+
+    test "D10 GET XSS handler returns status 200" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerXSSTitle)
+      assert response.status == 200
+    end
+  end
+
+  describe "htmx/1" do
     test "renders html content with htmx inlined and renders assigns" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
 
-      assert response.status == 200,
-        "Expected 200, got #{response.status}. Body: #{String.slice(to_string(response.body), 0, 500)}"
-
-      assert response.headers["content-type"] == ["text/html; charset=utf-8"],
-        "content-type: #{inspect(response.headers["content-type"])}"
-
-      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"],
-        "cache-control: #{inspect(response.headers["cache-control"])}, all headers: #{inspect(Map.keys(response.headers))}"
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
 
       body = response.body
       html = Floki.parse_document!(body)
 
-      # htmx.js is inlined, not loaded from CDN
       scripts = Floki.find(html, "script")
       assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
       refute body =~ "unpkg.com"
 
-      # Tailwind is still loaded from head option
       assert html
              |> Floki.find("script[src]")
              |> Floki.attribute("src") == ["https://cdn.tailwindcss.com"]
@@ -69,7 +77,6 @@ defmodule FrancisHtmxTest do
              |> Floki.find("title")
              |> Floki.text() == "Testing HTMX"
 
-      # Verify proper HTML5 structure
       assert body =~ ~s(<html lang="en">)
       assert body =~ ~s(<meta charset="utf-8">)
       assert body =~ ~s(<meta name="viewport")
@@ -81,8 +88,7 @@ defmodule FrancisHtmxTest do
     end
 
     test "renders html content with htmx inlined and renders without assigns" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerWithoutAssigns)
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithoutAssigns)
 
       assert response.status == 200
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
@@ -91,7 +97,6 @@ defmodule FrancisHtmxTest do
       body = response.body
       html = Floki.parse_document!(body)
 
-      # htmx.js is inlined, not loaded from CDN
       scripts = Floki.find(html, "script")
       assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
       refute body =~ "unpkg.com"
@@ -108,7 +113,6 @@ defmodule FrancisHtmxTest do
              |> Floki.find("title")
              |> Floki.text() == "Testing HTMX"
 
-      # Verify proper HTML5 structure
       assert body =~ ~s(<html lang="en">)
       assert body =~ ~s(<meta charset="utf-8">)
       assert body =~ ~s(<meta name="viewport")
@@ -120,13 +124,11 @@ defmodule FrancisHtmxTest do
     end
 
     test "escapes title to prevent XSS" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerXSSTitle)
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerXSSTitle)
 
       assert response.status == 200
 
       body = response.body
-      # The raw <script> tag in the title should be escaped
       refute body =~ "<title><script>alert('xss')</script></title>"
       assert body =~ "&lt;script&gt;"
     end
@@ -134,8 +136,7 @@ defmodule FrancisHtmxTest do
 
   describe "htmx/2" do
     test "allows overriding title and head via opts" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerWithOpts)
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithOpts)
 
       assert response.status == 200
       assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
@@ -143,22 +144,18 @@ defmodule FrancisHtmxTest do
       body = response.body
       html = Floki.parse_document!(body)
 
-      # Title is overridden via htmx/2 opts
       assert html
              |> Floki.find("title")
              |> Floki.text() == "Overridden Title"
 
-      # Head content from opts is present
       assert html
              |> Floki.find("link")
              |> Floki.attribute("href") == ["/custom.css"]
 
-      # htmx.js is still inlined
       scripts = Floki.find(html, "script")
       assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
       refute body =~ "unpkg.com"
 
-      # Verify proper HTML5 structure
       assert body =~ ~s(<html lang="en">)
       assert body =~ ~s(<meta charset="utf-8">)
 
