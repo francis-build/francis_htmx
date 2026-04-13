@@ -1,23 +1,24 @@
 defmodule FrancisHtmx.MixProject do
   use Mix.Project
-  @version "0.2.2"
+  @version "0.3.0"
   def project do
     [
       name: "Francis HTMX",
       app: :francis_htmx,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
       docs: docs(),
       source_url: "https://github.com/filipecabaco/francis_htmx",
       elixirc_paths: elixirc_paths(Mix.env()),
-      description: "Francis module for HTMX integration",
+      description: "HTMX integration for Francis with bundled htmx.js and EEx templating",
       dialyzer: [
         # Put the project-level PLT in the priv/ directory (instead of the default _build/ location)
         plt_file: {:no_warn, "priv/plts/project.plt"},
-        plt_add_apps: [:mix, :iex]
+        plt_add_apps: [:mix, :iex],
+        ignore_warnings: ".dialyzer_ignore.exs"
       ]
     ]
   end
@@ -32,7 +33,7 @@ defmodule FrancisHtmx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:francis, "~> 0.1"},
+      {:francis, "~> 0.3.0"},
       {:phoenix_html, "~> 4.0"},
       {:req, "~> 0.4.5", only: :test},
       {:floki, "~> 0.35.2", only: :test},
@@ -46,7 +47,7 @@ defmodule FrancisHtmx.MixProject do
 
   defp package do
     [
-      files: ["lib", "test", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib", "priv", "test", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Filipe Cabaço"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/filipecabaco/francis_htmx"}

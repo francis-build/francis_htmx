@@ -1,23 +1,22 @@
 defmodule FrancisHtmxTest do
   use ExUnit.Case
-  alias FrancisHtmx
 
   describe "htmx/1" do
-    test "renders html content with htmx loaded and renders assigns" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+    test "renders html content with htmx inlined and renders assigns" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
 
       assert response.status == 200
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
 
       body = response.body
       html = Floki.parse_document!(body)
 
-      assert html
-             |> Floki.find("script")
-             |> Floki.attribute("src") == [
-               "https://cdn.tailwindcss.com",
-               "https://unpkg.com/htmx.org@2"
+      # htmx.js is inlined (present in body, not loaded from CDN)
+      assert body =~ "htmx"
+      refute body =~ "unpkg.com"
+      assert Floki.find(html, "script[src]") |> Floki.attribute("src") == [
+               "https://cdn.tailwindcss.com"
              ]
 
       assert html
@@ -28,27 +27,32 @@ defmodule FrancisHtmxTest do
              |> Floki.find("title")
              |> Floki.text() == "Testing HTMX"
 
+      # Verify proper HTML5 structure
+      assert body =~ ~s(<html lang="en">)
+      assert body =~ ~s(<meta charset="utf-8">)
+      assert body =~ ~s(<meta name="viewport")
+
       assert html
              |> Floki.find("body")
              |> Floki.find("div")
              |> Floki.text() == "test"
     end
 
-    test "renders html content with htmx loaded and renders without assigns" do
-      response =
-        Req.get!("/", plug: FrancisHtmxTestHandlerWithoutAssigns)
+    test "renders html content with htmx inlined and renders without assigns" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithoutAssigns)
 
       assert response.status == 200
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
 
       body = response.body
       html = Floki.parse_document!(body)
 
-      assert html
-             |> Floki.find("script")
-             |> Floki.attribute("src") == [
-               "https://cdn.tailwindcss.com",
-               "https://unpkg.com/htmx.org@2"
+      # htmx.js is inlined (present in body, not loaded from CDN)
+      assert body =~ "htmx"
+      refute body =~ "unpkg.com"
+      assert Floki.find(html, "script[src]") |> Floki.attribute("src") == [
+               "https://cdn.tailwindcss.com"
              ]
 
       assert html
@@ -59,27 +63,61 @@ defmodule FrancisHtmxTest do
              |> Floki.find("title")
              |> Floki.text() == "Testing HTMX"
 
+      # Verify proper HTML5 structure
+      assert body =~ ~s(<html lang="en">)
+      assert body =~ ~s(<meta charset="utf-8">)
+      assert body =~ ~s(<meta name="viewport")
+
       assert html
              |> Floki.find("body")
              |> Floki.find("div")
              |> Floki.text() == "test"
     end
 
-    test "raises error if version format is invalid" do
-      assert_raise RuntimeError,
-                   "Invalid version format. Expected format is 'x.y.z' or 'x.y.*'. Got: 'invalid'",
-                   fn ->
-                     defmodule FrancisHtmxFailedVersionTest do
-                       use Francis
+    test "escapes title to prevent XSS" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerXSSTitle)
 
-                       use FrancisHtmx, version: "invalid"
+      assert response.status == 200
 
-                       htmx(fn _ ->
-                         assigns = %{title: "test"}
-                         ~E"<div>Test</div>"
-                       end)
-                     end
-                   end
+      body = response.body
+      # The raw <script> tag in the title should be escaped
+      refute body =~ "<title><script>alert('xss')</script></title>"
+      assert body =~ "&lt;script&gt;"
+    end
+  end
+
+  describe "htmx/2" do
+    test "allows overriding title and head via opts" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithOpts)
+
+      assert response.status == 200
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+
+      body = response.body
+      html = Floki.parse_document!(body)
+
+      # Title is overridden via htmx/2 opts
+      assert html
+             |> Floki.find("title")
+             |> Floki.text() == "Overridden Title"
+
+      # Head content from opts is present
+      assert html
+             |> Floki.find("link")
+             |> Floki.attribute("href") == ["/custom.css"]
+
+      # htmx.js is inlined (present in body, not loaded from CDN)
+      assert body =~ "htmx"
+      refute body =~ "unpkg.com"
+
+      # Verify proper HTML5 structure
+      assert body =~ ~s(<html lang="en">)
+      assert body =~ ~s(<meta charset="utf-8">)
+
+      assert html
+             |> Floki.find("body")
+             |> Floki.find("div")
+             |> Floki.text() == "override test"
     end
   end
 end
@@ -88,7 +126,6 @@ defmodule FrancisHtmxTestHandlerWithAssigns do
   use Francis
 
   use FrancisHtmx,
-    version: "2",
     title: "Testing HTMX",
     head: ~E"""
       <script src="https://cdn.tailwindcss.com"></script>
@@ -108,7 +145,6 @@ defmodule FrancisHtmxTestHandlerWithoutAssigns do
   use Francis
 
   use FrancisHtmx,
-    version: "2",
     title: "Testing HTMX",
     head: ~E"""
       <script src="https://cdn.tailwindcss.com"></script>
@@ -120,4 +156,34 @@ defmodule FrancisHtmxTestHandlerWithoutAssigns do
     <div>test</div>
     """
   end)
+end
+
+defmodule FrancisHtmxTestHandlerXSSTitle do
+  use Francis
+
+  use FrancisHtmx,
+    title: "<script>alert('xss')</script>"
+
+  htmx(fn _ ->
+    ~E"""
+    <div>safe</div>
+    """
+  end)
+end
+
+defmodule FrancisHtmxTestHandlerWithOpts do
+  use Francis
+  use FrancisHtmx, title: "Default Title"
+
+  htmx(
+    fn _ ->
+      ~E"""
+      <div>override test</div>
+      """
+    end,
+    title: "Overridden Title",
+    head: ~E"""
+      <link href="/custom.css" rel="stylesheet">
+    """
+  )
 end

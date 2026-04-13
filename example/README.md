@@ -1,21 +1,21 @@
-# Example
+# FrancisHtmx Example
 
-**TODO: Add description**
+A demo application showing FrancisHtmx in action with a color-swapping widget.
 
-## Installation
+## Running
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `example` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:example, "~> 0.1.0"}
-  ]
-end
+```bash
+cd example
+mix deps.get
+mix run --no-halt
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/example>.
+Then open http://localhost:4000 in your browser.
 
+## What it demonstrates
+
+- `use FrancisHtmx` with a custom title
+- The `htmx` macro generating a full HTML page with htmx inlined
+- `hx-get` and `hx-trigger` for polling an endpoint every second
+- The `~E` sigil with `@assigns` for dynamic HTML fragments
+- CSS transitions driven by htmx DOM swaps
