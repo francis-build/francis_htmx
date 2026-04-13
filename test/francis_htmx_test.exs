@@ -2,13 +2,51 @@ defmodule FrancisHtmxTest do
   use ExUnit.Case
 
   describe "htmx/1" do
+    test "DIAGNOSTIC: check handler module and francis version" do
+      # Check that handler module is available
+      assert Code.ensure_loaded?(FrancisHtmxTestHandlerWithAssigns),
+        "Handler module not loaded"
+
+      # Check Francis.HTML availability
+      assert Code.ensure_loaded?(Francis.HTML),
+        "Francis.HTML module not available - wrong Francis version?"
+
+      # Check Francis version
+      francis_vsn =
+        Application.spec(:francis, :vsn) |> to_string()
+
+      assert francis_vsn =~ "0.3",
+        "Expected Francis ~> 0.3.x, got: #{francis_vsn}"
+
+      # Try the actual request and capture any error
+      try do
+        response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+
+        flunk(
+          "DIAG: status=#{response.status} " <>
+            "content-type=#{inspect(response.headers["content-type"])} " <>
+            "cache-control=#{inspect(response.headers["cache-control"])} " <>
+            "body_size=#{byte_size(to_string(response.body))} " <>
+            "body_start=#{String.slice(to_string(response.body), 0, 300)}"
+        )
+      rescue
+        e ->
+          flunk("DIAG ERROR: #{Exception.format(:error, e, __STACKTRACE__)}")
+      end
+    end
+
     test "renders html content with htmx inlined and renders assigns" do
       response =
         Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
 
-      assert response.status == 200
-      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+      assert response.status == 200,
+        "Expected 200, got #{response.status}. Body: #{String.slice(to_string(response.body), 0, 500)}"
+
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"],
+        "content-type: #{inspect(response.headers["content-type"])}"
+
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"],
+        "cache-control: #{inspect(response.headers["cache-control"])}, all headers: #{inspect(Map.keys(response.headers))}"
 
       body = response.body
       html = Floki.parse_document!(body)
