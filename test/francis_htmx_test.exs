@@ -48,6 +48,50 @@ defmodule FrancisHtmxTest do
       response = Req.get!("/", plug: FrancisHtmxTestHandlerXSSTitle)
       assert response.status == 200
     end
+
+    test "D11 Floki parses body from assigns handler" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      _html = Floki.parse_document!(response.body)
+    end
+
+    test "D12 Floki finds script elements" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      scripts = Floki.find(html, "script")
+      assert length(scripts) > 0
+    end
+
+    test "D13 Floki finds script with src attribute" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      src_scripts = Floki.find(html, "script[src]")
+      assert Floki.attribute(src_scripts, "src") == ["https://cdn.tailwindcss.com"]
+    end
+
+    test "D14 Floki finds link element" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      assert Floki.find(html, "link") |> Floki.attribute("href") == ["/app.css"]
+    end
+
+    test "D15 Floki finds title text" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      assert Floki.find(html, "title") |> Floki.text() == "Testing HTMX"
+    end
+
+    test "D16 Floki finds body div text" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      assert Floki.find(html, "body") |> Floki.find("div") |> Floki.text() == "test"
+    end
+
+    test "D17 inline htmx script contains htmx keyword" do
+      response = Req.get!("/", plug: FrancisHtmxTestHandlerWithAssigns)
+      html = Floki.parse_document!(response.body)
+      scripts = Floki.find(html, "script")
+      assert Enum.any?(scripts, fn script -> Floki.text(script) =~ "htmx" end)
+    end
   end
 
   describe "htmx/1" do
