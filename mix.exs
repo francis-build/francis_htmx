@@ -6,7 +6,7 @@ defmodule FrancisHtmx.MixProject do
       name: "Francis HTMX",
       app: :francis_htmx,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
